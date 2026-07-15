@@ -1,0 +1,14 @@
+/home/kevin/RiderProjects/BankingSystem/BankingSystem/bin/Debug/net10.0/BankingSystem
+/home/kevin/RiderProjects/BankingSystem/BankingSystem/bin/Debug/net10.0/BankingSystem.deps.json
+/home/kevin/RiderProjects/BankingSystem/BankingSystem/bin/Debug/net10.0/BankingSystem.runtimeconfig.json
+/home/kevin/RiderProjects/BankingSystem/BankingSystem/bin/Debug/net10.0/BankingSystem.dll
+/home/kevin/RiderProjects/BankingSystem/BankingSystem/bin/Debug/net10.0/BankingSystem.pdb
+/home/kevin/RiderProjects/BankingSystem/BankingSystem/obj/Debug/net10.0/BankingSystem.GeneratedMSBuildEditorConfig.editorconfig
+/home/kevin/RiderProjects/BankingSystem/BankingSystem/obj/Debug/net10.0/BankingSystem.AssemblyInfoInputs.cache
+/home/kevin/RiderProjects/BankingSystem/BankingSystem/obj/Debug/net10.0/BankingSystem.AssemblyInfo.cs
+/home/kevin/RiderProjects/BankingSystem/BankingSystem/obj/Debug/net10.0/BankingSystem.csproj.CoreCompileInputs.cache
+/home/kevin/RiderProjects/BankingSystem/BankingSystem/obj/Debug/net10.0/BankingSystem.dll
+/home/kevin/RiderProjects/BankingSystem/BankingSystem/obj/Debug/net10.0/refint/BankingSystem.dll
+/home/kevin/RiderProjects/BankingSystem/BankingSystem/obj/Debug/net10.0/BankingSystem.pdb
+/home/kevin/RiderProjects/BankingSystem/BankingSystem/obj/Debug/net10.0/BankingSystem.genruntimeconfig.cache
+/home/kevin/RiderProjects/BankingSystem/BankingSystem/obj/Debug/net10.0/ref/BankingSystem.dll

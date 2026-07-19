@@ -1092,19 +1092,36 @@ namespace BankingSystem
                 Console.WriteLine("Invalid allocation amount logic entered.");
                 return;
             }
+            
+            BankAccount acc1 = new SavingsAccount(num, name, pin, deposit);
+            BankAccount acc2 = new CheckingAccount(num, name, pin, deposit);
+            BankAccount acc3 = new FixedDepositAccount(num, name, pin, deposit);
+            
+            if (typeStr == "1")
+            {
+                Console.Write("Phone: ");
+                acc1.PhoneNumber = Console.ReadLine();
+                Console.Write("Address: ");
+                acc1.AddressLine = Console.ReadLine();
+                CentralBankData.AddAccount(acc1);
+            }
+            else if (typeStr == "2")
+            {
+                Console.Write("Phone: ");
+                acc2.PhoneNumber = Console.ReadLine();
+                Console.Write("Address: ");
+                acc2.AddressLine = Console.ReadLine();
+                CentralBankData.AddAccount(acc2);
+            }
+            else if (typeStr == "3")
+            {
+                Console.Write("Phone: ");
+                acc3.PhoneNumber = Console.ReadLine();
+                Console.Write("Address: ");
+                acc3.AddressLine = Console.ReadLine();
+                CentralBankData.AddAccount(acc3);
+            }
 
-            BankAccount acc = null;
-            if (typeStr == "1") acc = new SavingsAccount(num, name, pin, deposit);
-            else if (typeStr == "2") acc = new CheckingAccount(num, name, pin, deposit);
-            else if (typeStr == "3") acc = new FixedDepositAccount(num, name, pin, deposit);
-            else return;
-
-            Console.Write("Phone: ");
-            acc.PhoneNumber = Console.ReadLine();
-            Console.Write("Address: ");
-            acc.AddressLine = Console.ReadLine();
-
-            CentralBankData.AddAccount(acc);
             Console.WriteLine("Account created successfully.");
         }
 

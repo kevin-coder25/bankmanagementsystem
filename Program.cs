@@ -1,11 +1,57 @@
-using System;
+﻿using System;
 
-namespace BankingSystem
+namespace BankManagementSystem
 {
+
+    public class BankingException : Exception
+    {
+        public BankingException(string message) : base(message) { }
+    }
+
+    public class InvalidAccountDataException : BankingException
+    {
+        public InvalidAccountDataException(string message) : base(message) { }
+    }
+
+    public class DuplicateAccountException : BankingException
+    {
+        public DuplicateAccountException(string message) : base(message) { }
+    }
+
+    public class AccountNotFoundException : BankingException
+    {
+        public AccountNotFoundException(string message) : base(message) { }
+    }
+
+    public class AccountFrozenException : BankingException
+    {
+        public AccountFrozenException(string message) : base(message) { }
+    }
+
+    public class InvalidTransactionException : BankingException
+    {
+        public InvalidTransactionException(string message) : base(message) { }
+    }
+
+    public class InsufficientFundsException : BankingException
+    {
+        public InsufficientFundsException(string message) : base(message) { }
+    }
+
+    public class LoanException : BankingException
+    {
+        public LoanException(string message) : base(message) { }
+    }
+
+    public class SelfTransferException : BankingException
+    {
+        public SelfTransferException(string message) : base(message) { }
+    }
+
     public class Transaction
     {
         public string Description { get; set; }
-        public double Amount { get; set; } 
+        public double Amount { get; set; }
         public double ResultingBalance { get; set; }
 
         public Transaction(string desc, double amt, double bal)
@@ -64,9 +110,22 @@ namespace BankingSystem
 
         public BankAccount(string accNum, string name, string pin, double initialDeposit)
         {
-            _accountNumber = accNum ?? throw new ArgumentNullException(nameof(accNum));
-            _accountHolderName = name ?? "Unknown";
-            _pinCode = pin ?? "0000";
+            if (string.IsNullOrWhiteSpace(accNum))
+            {
+                throw new InvalidAccountDataException("Account number cannot be empty.");
+            }
+            if (string.IsNullOrWhiteSpace(pin))
+            {
+                throw new InvalidAccountDataException("PIN cannot be empty.");
+            }
+            if (initialDeposit < 0)
+            {
+                throw new InvalidTransactionException("Initial deposit cannot be negative.");
+            }
+
+            _accountNumber = accNum;
+            _accountHolderName = string.IsNullOrWhiteSpace(name) ? "Unknown" : name;
+            _pinCode = pin;
             _balance = initialDeposit;
             _loanBalance = 0.0;
             _phoneNumber = "Not Specified";
@@ -89,10 +148,11 @@ namespace BankingSystem
 
         public void UpdatePin(string newPin)
         {
-            if (!string.IsNullOrWhiteSpace(newPin))
+            if (string.IsNullOrWhiteSpace(newPin))
             {
-                _pinCode = newPin;
+                throw new InvalidAccountDataException("New PIN cannot be empty.");
             }
+            _pinCode = newPin;
         }
 
         public void RecordTransaction(string desc, double amt)
@@ -152,13 +212,11 @@ namespace BankingSystem
         {
             if (_isFrozen)
             {
-                Console.WriteLine("Account is frozen.");
-                return;
+                throw new AccountFrozenException("Account is frozen. Deposits are not allowed.");
             }
             if (amount <= 0)
             {
-                Console.WriteLine("Invalid deposit amount.");
-                return;
+                throw new InvalidTransactionException("Deposit amount must be greater than zero.");
             }
             _balance += amount;
             RecordTransaction("Deposit", amount);
@@ -169,17 +227,15 @@ namespace BankingSystem
         {
             if (_isFrozen)
             {
-                Console.WriteLine("Account is frozen.");
-                return;
+                throw new AccountFrozenException("Account is frozen. Deposits are not allowed.");
             }
             if (amount <= 0)
             {
-                Console.WriteLine("Invalid deposit amount.");
-                return;
+                throw new InvalidTransactionException("Deposit amount must be greater than zero.");
             }
             _balance += amount;
             RecordTransaction("Deposit via " + (source ?? "Unknown Source"), amount);
-            Console.WriteLine("Deposited: " + amount + " PKR via " + source);
+            Console.WriteLine("Deposited: " + amount + " PKR via " + (source ?? "Unknown Source"));
         }
 
         public abstract void Withdraw(double amount);
@@ -189,7 +245,11 @@ namespace BankingSystem
         {
             if (_isFrozen)
             {
-                return;
+                throw new AccountFrozenException("Account is frozen. Loans cannot be disbursed.");
+            }
+            if (loanAmount <= 0)
+            {
+                throw new InvalidTransactionException("Loan amount must be greater than zero.");
             }
             _loanBalance += loanAmount;
             _balance += loanAmount;
@@ -200,33 +260,43 @@ namespace BankingSystem
         {
             if (_isFrozen)
             {
-                return;
+                throw new AccountFrozenException("Account is frozen. Loans cannot be disbursed.");
+            }
+            if (loanAmount <= 0)
+            {
+                throw new InvalidTransactionException("Loan amount must be greater than zero.");
+            }
+            if (processingFee < 0)
+            {
+                throw new InvalidTransactionException("Processing fee cannot be negative.");
             }
             _loanBalance += (loanAmount + processingFee);
             _balance += loanAmount;
             RecordTransaction("Loan Disbursed", loanAmount);
-            RecordTransaction("Processing Fee Charged", -processingFee); 
+            RecordTransaction("Processing Fee Charged", -processingFee);
         }
 
         public void RepayLoan(double paymentAmount)
         {
             if (_isFrozen)
             {
-                return;
+                throw new AccountFrozenException("Account is frozen. Loan repayment is not allowed.");
             }
             if (paymentAmount <= 0)
             {
-                return;
+                throw new InvalidTransactionException("Repayment amount must be greater than zero.");
+            }
+            if (_loanBalance <= 0)
+            {
+                throw new LoanException("There is no outstanding loan on this account.");
             }
             if (_balance < paymentAmount)
             {
-                Console.WriteLine("Insufficient balance for repayment.");
-                return;
+                throw new InsufficientFundsException("Insufficient balance for repayment.");
             }
             if (paymentAmount > _loanBalance)
             {
-                Console.WriteLine("Payment exceeds outstanding loan.");
-                return;
+                throw new LoanException("Payment exceeds outstanding loan.");
             }
 
             _balance -= paymentAmount;
@@ -238,23 +308,25 @@ namespace BankingSystem
 
     public class SavingsAccount : BankAccount
     {
-        private const double AtmFee = 50.0; 
+        private const double AtmFee = 50.0;
 
         public override string AccountType { get { return "Savings"; } }
-        public SavingsAccount(string accNum, string name, string pin, double initialDeposit) 
+        public SavingsAccount(string accNum, string name, string pin, double initialDeposit)
             : base(accNum, name, pin, initialDeposit) { }
 
         public override void Withdraw(double amount)
         {
             if (IsFrozen)
             {
-                Console.WriteLine("Account is frozen.");
-                return;
+                throw new AccountFrozenException("Account is frozen. Withdrawals are not allowed.");
             }
-            if (amount <= 0 || _balance < amount)
+            if (amount <= 0)
             {
-                Console.WriteLine("Insufficient funds.");
-                return;
+                throw new InvalidTransactionException("Withdrawal amount must be greater than zero.");
+            }
+            if (_balance < amount)
+            {
+                throw new InsufficientFundsException("Insufficient funds.");
             }
             _balance -= amount;
             RecordTransaction("Withdrawal", -amount);
@@ -263,15 +335,19 @@ namespace BankingSystem
 
         public override void Withdraw(double amount, bool isATM)
         {
-            double fee = isATM ? AtmFee : 0.0;
             if (IsFrozen)
             {
-                return;
+                throw new AccountFrozenException("Account is frozen. Withdrawals are not allowed.");
             }
-            if (amount <= 0 || _balance < (amount + fee))
+            if (amount <= 0)
             {
-                Console.WriteLine("Insufficient funds including ATM fee.");
-                return;
+                throw new InvalidTransactionException("Withdrawal amount must be greater than zero.");
+            }
+
+            double fee = isATM ? AtmFee : 0.0;
+            if (_balance < (amount + fee))
+            {
+                throw new InsufficientFundsException("Insufficient funds including ATM fee.");
             }
             _balance -= (amount + fee);
             RecordTransaction(isATM ? "ATM Withdrawal" : "Withdrawal", -amount);
@@ -285,32 +361,33 @@ namespace BankingSystem
 
     public class CheckingAccount : BankAccount
     {
-        private const double OverdraftLimit = -50000.0; 
+        private const double OverdraftLimit = -50000.0;
 
         public override string AccountType { get { return "Checking"; } }
-        public CheckingAccount(string accNum, string name, string pin, double initialDeposit) 
+        public CheckingAccount(string accNum, string name, string pin, double initialDeposit)
             : base(accNum, name, pin, initialDeposit) { }
 
         public override void Withdraw(double amount)
         {
             if (IsFrozen)
             {
-                Console.WriteLine("Account is frozen.");
-                return;
+                throw new AccountFrozenException("Account is frozen. Withdrawals are not allowed.");
             }
-            if (amount <= 0 || _balance - amount < OverdraftLimit)
+            if (amount <= 0)
             {
-                Console.WriteLine($"Rejected: Exceeds overdraft limit ({Math.Abs(OverdraftLimit)} PKR).");
-                return;
+                throw new InvalidTransactionException("Withdrawal amount must be greater than zero.");
+            }
+            if (_balance - amount < OverdraftLimit)
+            {
+                throw new InsufficientFundsException($"Rejected: Exceeds overdraft limit ({Math.Abs(OverdraftLimit)} PKR).");
             }
             _balance -= amount;
-            RecordTransaction("Withdrawal", -amount); 
+            RecordTransaction("Withdrawal", -amount);
             Console.WriteLine("Withdrew: " + amount + " PKR");
         }
 
         public override void Withdraw(double amount, bool isATM)
         {
-            
             Withdraw(amount);
         }
     }
@@ -331,27 +408,28 @@ namespace BankingSystem
         {
             if (IsFrozen)
             {
-                return;
+                throw new AccountFrozenException("Account is frozen. Withdrawals are not allowed.");
             }
             if (!_isMatured)
             {
-                Console.WriteLine("Rejected: Fixed deposit is still locked.");
-                return;
+                throw new InvalidTransactionException("Rejected: Fixed deposit is still locked.");
             }
-            if (amount <= 0 || _balance < amount)
+            if (amount <= 0)
             {
-                Console.WriteLine("Insufficient funds.");
-                return;
+                throw new InvalidTransactionException("Withdrawal amount must be greater than zero.");
+            }
+            if (_balance < amount)
+            {
+                throw new InsufficientFundsException("Insufficient funds.");
             }
 
             _balance -= amount;
-            RecordTransaction("Withdrawal", -amount); 
+            RecordTransaction("Withdrawal", -amount);
             Console.WriteLine("Withdrew: " + amount + " PKR");
         }
 
         public override void Withdraw(double amount, bool isATM)
         {
-            
             Withdraw(amount);
         }
     }
@@ -368,7 +446,14 @@ namespace BankingSystem
 
         public static void AddAccount(BankAccount acc)
         {
-            if (acc == null) return;
+            if (acc == null)
+            {
+                throw new InvalidAccountDataException("Cannot add a null account to the system.");
+            }
+            if (Find(acc.AccountNumber) != null)
+            {
+                throw new DuplicateAccountException("An account with number " + acc.AccountNumber + " already exists.");
+            }
             if (AccountCount >= Database.Length)
             {
                 BankAccount[] temp = new BankAccount[Database.Length * 2];
@@ -430,6 +515,16 @@ namespace BankingSystem
             }
             return null;
         }
+
+        public static BankAccount FindOrThrow(string accNum)
+        {
+            BankAccount acc = Find(accNum);
+            if (acc == null)
+            {
+                throw new AccountNotFoundException("No account found with number: " + accNum);
+            }
+            return acc;
+        }
     }
 
     public class Login
@@ -445,123 +540,145 @@ namespace BankingSystem
         {
             while (running)
             {
-                Console.WriteLine("\n=====================================");
-                Console.WriteLine("             BANK SYSTEM             ");
-                Console.WriteLine("=====================================");
-                Console.WriteLine(" 1. Customer Login");
-                Console.WriteLine(" 2. Administrator Login");
-                Console.WriteLine(" 3. Exit Application");
-                Console.WriteLine("=====================================");
-                Console.Write("Selection: ");
-                
-                string inputStr = Console.ReadLine();
-                
-                if (string.IsNullOrWhiteSpace(inputStr) || !int.TryParse(inputStr, out int selection))
+                try
                 {
-                    Console.WriteLine("Invalid entry. Use numbers.");
-                    continue;
-                }
+                    Console.WriteLine("\n=====================================");
+                    Console.WriteLine("             BANK SYSTEM             ");
+                    Console.WriteLine("=====================================");
+                    Console.WriteLine(" 1. Customer Login");
+                    Console.WriteLine(" 2. Administrator Login");
+                    Console.WriteLine(" 3. Exit Application");
+                    Console.WriteLine("=====================================");
+                    Console.Write("Selection: ");
 
-                if (selection == 1)
-                {
-                    Console.Write(" Account Number: ");
-                    string _accountNumber = Console.ReadLine();
+                    string inputStr = Console.ReadLine();
 
-                    BankAccount targetAccount = CentralBankData.Find(_accountNumber);
-
-                    if (targetAccount != null)
+                    if (string.IsNullOrWhiteSpace(inputStr) || !int.TryParse(inputStr, out int selection))
                     {
-                        if (targetAccount.IsFrozen)
-                        {
-                            Console.WriteLine("Account is frozen.");
-                            continue;
-                        }
+                        Console.WriteLine("Invalid entry. Use numbers.");
+                        continue;
+                    }
 
-                        bool wrongpin = false;
-                        int attempts = 0;
-                        do
-                        {
-                            Console.Write(" Enter PIN: ");
-                            string _pinNumber = Console.ReadLine();
-
-                            if (targetAccount.VerifyPin(_pinNumber))
-                            {
-                                wrongpin = false;
-                                currentActiveAccount = targetAccount;
-                                CustomerStart = true;
-                                
-                                CustomerLogin clientView = new CustomerLogin();
-                                clientView.Start();
-                            }
-                            else
-                            {
-                                attempts++;
-                                Console.WriteLine("Wrong PIN. Remaining: " + (3 - attempts));
-                                if (attempts >= 3)
-                                {
-                                    Console.WriteLine("Max attempts reached.");
-                                    wrongpin = false;
-                                }
-                                else
-                                {
-                                    wrongpin = true;
-                                }
-                            }
-                        } while (wrongpin);
+                    if (selection == 1)
+                    {
+                        HandleCustomerLogin();
+                    }
+                    else if (selection == 2)
+                    {
+                        HandleAdminLogin();
+                    }
+                    else if (selection == 3)
+                    {
+                        running = false;
                     }
                     else
                     {
-                        Console.WriteLine("Account not found.");
+                        Console.WriteLine("Invalid option.");
                     }
                 }
-                else if (selection == 2)
+                catch (BankingException ex)
                 {
-                    Console.Write(" Admin ID: ");
-                    string adminId = Console.ReadLine();
-
-                    if (adminId == "admin")
-                    {
-                        bool wrongpin = false;
-                        do
-                        {
-                            Console.Write(" Enter Admin PIN: ");
-                            string pinNumber = Console.ReadLine();
-                            string adminPin = "1234";
-                            if (pinNumber == adminPin)
-                            {
-                                wrongpin = false;
-                                AdminStart = true;
-
-                                AdminLogin adminView = new AdminLogin();
-                                adminView.Start();
-                            }
-                            else
-                            {
-                                Console.WriteLine("Wrong PIN.");
-                                wrongpin = true;
-                            }
-                        } while (wrongpin);
-                    }
-                    else
-                    {
-                        Console.WriteLine("Wrong ID.");
-                    }
+                    Console.WriteLine("Operation failed: " + ex.Message);
                 }
-                else if (selection == 3)
+                catch (Exception ex)
                 {
-                    running = false;
+                    Console.WriteLine("An unexpected error occurred: " + ex.Message);
+                }
+            }
+        }
+
+        private void HandleCustomerLogin()
+        {
+            Console.Write(" Account Number: ");
+            string _accountNumber = Console.ReadLine();
+
+            BankAccount targetAccount;
+            try
+            {
+                targetAccount = CentralBankData.FindOrThrow(_accountNumber);
+            }
+            catch (AccountNotFoundException ex)
+            {
+                Console.WriteLine(ex.Message);
+                return;
+            }
+
+            if (targetAccount.IsFrozen)
+            {
+                Console.WriteLine("Account is frozen.");
+                return;
+            }
+
+            bool wrongpin = false;
+            int attempts = 0;
+            do
+            {
+                Console.Write(" Enter PIN: ");
+                string _pinNumber = Console.ReadLine();
+
+                if (targetAccount.VerifyPin(_pinNumber))
+                {
+                    wrongpin = false;
+                    currentActiveAccount = targetAccount;
+                    CustomerStart = true;
+
+                    CustomerLogin clientView = new CustomerLogin();
+                    clientView.Start();
                 }
                 else
                 {
-                    Console.WriteLine("Invalid option.");
+                    attempts++;
+                    Console.WriteLine("Wrong PIN. Remaining: " + (3 - attempts));
+                    if (attempts >= 3)
+                    {
+                        Console.WriteLine("Max attempts reached.");
+                        wrongpin = false;
+                    }
+                    else
+                    {
+                        wrongpin = true;
+                    }
                 }
+            } while (wrongpin);
+        }
+
+        private void HandleAdminLogin()
+        {
+            Console.Write(" Admin ID: ");
+            string adminId = Console.ReadLine();
+
+            if (adminId == "admin")
+            {
+                bool wrongpin = false;
+                do
+                {
+                    Console.Write(" Enter Admin PIN: ");
+                    string pinNumber = Console.ReadLine();
+                    string adminPin = "1234";
+                    if (pinNumber == adminPin)
+                    {
+                        wrongpin = false;
+                        AdminStart = true;
+
+                        AdminLogin adminView = new AdminLogin();
+                        adminView.Start();
+                    }
+                    else
+                    {
+                        Console.WriteLine("Wrong PIN.");
+                        wrongpin = true;
+                    }
+                } while (wrongpin);
+            }
+            else
+            {
+                Console.WriteLine("Wrong ID.");
             }
         }
     }
 
     public class CustomerLogin : Login
     {
-        
         private const double ElectricityBillCost = 12000.00;
         private const double WaterBillCost = 1500.50;
         private const double InternetBillCost = 3500.90;
@@ -574,46 +691,81 @@ namespace BankingSystem
         {
             while (CustomerStart)
             {
-                Console.WriteLine("\n=====================================");
-                Console.WriteLine("          CUSTOMER ACCOUNT         ");
-                Console.WriteLine("=====================================");
-                Console.WriteLine(" User: " + currentActiveAccount.AccountHolderName + " [" + currentActiveAccount.AccountNumber + "]");
-                Console.WriteLine("=====================================");
-                Console.WriteLine(" 1. Account Info");
-                Console.WriteLine(" 2. Deposit");
-                Console.WriteLine(" 3. Withdraw");
-                Console.WriteLine(" 4. Transfer Funds");
-                Console.WriteLine(" 5. Transaction Statement");
-                Console.WriteLine(" 6. Manage Beneficiaries");
-                Console.WriteLine(" 7. Loan Repayment");
-                Console.WriteLine(" 8. Profile Maintenance");
-                Console.WriteLine(" 9. Pay Utility Bills");
-                Console.WriteLine(" 10. Check Credit Score");
-                Console.WriteLine(" 11. Currency Converter (from PKR)");
-                Console.WriteLine(" 12. Request Cheque Book");
-                Console.WriteLine(" 13. Log Out");
-                Console.WriteLine("=====================================");
-                Console.Write("Selection: ");
-
-                string choice = Console.ReadLine();
-                if (string.IsNullOrWhiteSpace(choice)) continue;
-
-                switch (choice)
+                try
                 {
-                    case "1": ShowInfo(); break;
-                    case "2": ShowDeposit(); break;
-                    case "3": ShowWithdraw(); break;
-                    case "4": ExecuteTransfer(); break;
-                    case "5": ShowStatement(); break;
-                    case "6": ExecuteBeneficiaryMenu(); break;
-                    case "7": ExecuteLoanRepayment(); break;
-                    case "8": OpenMaintenance(); break;
-                    case "9": ExecuteBillPayment(); break;
-                    case "10": CheckCredit(); break;
-                    case "11": RunCurrency(); break;
-                    case "12": RequestCheque(); break;
-                    case "13": LogOut(); break;
-                    default: Console.WriteLine("Invalid choice."); break;
+                    Console.WriteLine("\n=====================================");
+                    Console.WriteLine("          CUSTOMER ACCOUNT         ");
+                    Console.WriteLine("=====================================");
+                    Console.WriteLine(" User: " + currentActiveAccount.AccountHolderName + " [" + currentActiveAccount.AccountNumber + "]");
+                    Console.WriteLine("=====================================");
+                    Console.WriteLine(" 1. Account Info");
+                    Console.WriteLine(" 2. Deposit");
+                    Console.WriteLine(" 3. Withdraw");
+                    Console.WriteLine(" 4. Transfer Funds");
+                    Console.WriteLine(" 5. Transaction Statement");
+                    Console.WriteLine(" 6. Manage Beneficiaries");
+                    Console.WriteLine(" 7. Loan Repayment");
+                    Console.WriteLine(" 8. Profile Maintenance");
+                    Console.WriteLine(" 9. Pay Utility Bills");
+                    Console.WriteLine(" 10. Check Credit Score");
+                    Console.WriteLine(" 11. Currency Converter (from PKR)");
+                    Console.WriteLine(" 12. Request Cheque Book");
+                    Console.WriteLine(" 13. Log Out");
+                    Console.WriteLine("=====================================");
+                    Console.Write("Selection: ");
+
+                    string choice = Console.ReadLine();
+                    if (string.IsNullOrWhiteSpace(choice)) continue;
+
+                    switch (choice)
+                    {
+                        case "1": ShowInfo(); break;
+                        case "2": ShowDeposit(); break;
+                        case "3": ShowWithdraw(); break;
+                        case "4": ExecuteTransfer(); break;
+                        case "5": ShowStatement(); break;
+                        case "6": ExecuteBeneficiaryMenu(); break;
+                        case "7": ExecuteLoanRepayment(); break;
+                        case "8": OpenMaintenance(); break;
+                        case "9": ExecuteBillPayment(); break;
+                        case "10": CheckCredit(); break;
+                        case "11": RunCurrency(); break;
+                        case "12": RequestCheque(); break;
+                        case "13": LogOut(); break;
+                        default: Console.WriteLine("Invalid choice."); break;
+                    }
+                }
+                catch (AccountFrozenException ex)
+                {
+                    Console.WriteLine("Blocked: " + ex.Message);
+                }
+                catch (InsufficientFundsException ex)
+                {file:///home/kevin/Desktop/Backup/Banking system/BankManagemeSystem/BankManagemeSystem/Program.cs
+                    Console.WriteLine("Transaction failed: " + ex.Message);
+                }
+                catch (InvalidTransactionException ex)
+                {
+                    Console.WriteLine("Invalid transaction: " + ex.Message);
+                }
+                catch (LoanException ex)
+                {
+                    Console.WriteLine("Loan error: " + ex.Message);
+                }
+                catch (SelfTransferException ex)
+                {
+                    Console.WriteLine(ex.Message);
+                }
+                catch (AccountNotFoundException ex)
+                {
+                    Console.WriteLine(ex.Message);
+                }
+                catch (BankingException ex)
+                {
+                    Console.WriteLine("Operation failed: " + ex.Message);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("An unexpected error occurred: " + ex.Message);
                 }
             }
         }
@@ -697,7 +849,7 @@ namespace BankingSystem
                 for (int i = 0; i < currentActiveAccount.TransactionCount; i++)
                 {
                     Transaction entry = currentActiveAccount.Ledger[i];
-                    
+
                     string direction = entry.Amount >= 0 ? "+" : "";
                     Console.WriteLine("[" + (i + 1) + "] " + entry.Description + " | Delta: " + direction + entry.Amount + " PKR | Balance: " + entry.ResultingBalance + " PKR");
                 }
@@ -754,37 +906,31 @@ namespace BankingSystem
                 return;
             }
 
-            BankAccount destAcc = CentralBankData.Find(destNum);
-            if (destAcc != null)
+            BankAccount destAcc = CentralBankData.FindOrThrow(destNum);
+
+            if (destAcc.AccountNumber == currentActiveAccount.AccountNumber)
             {
-                if (destAcc.AccountNumber == currentActiveAccount.AccountNumber)
+                throw new SelfTransferException("Cannot transfer money to yourself.");
+            }
+
+            Console.Write("Enter amount to transfer: ");
+            if (double.TryParse(Console.ReadLine(), out double transferAmt))
+            {
+                if (transferAmt <= 0)
                 {
-                    Console.WriteLine("Cannot transfer money to yourself.");
-                    return;
+                    throw new InvalidTransactionException("Transfer amount must be greater than zero.");
                 }
 
-                Console.Write("Enter amount to transfer: ");
-                if (double.TryParse(Console.ReadLine(), out double transferAmt))
-                {
-                    if (transferAmt <= 0)
-                    {
-                        return;
-                    }
-                    double initialBalance = currentActiveAccount.Balance;
-                    currentActiveAccount.Withdraw(transferAmt);
+                currentActiveAccount.Withdraw(transferAmt);
+                destAcc.Deposit(transferAmt);
 
-                    if (currentActiveAccount.Balance < initialBalance)
-                    {
-                        destAcc.Deposit(transferAmt);
-                        currentActiveAccount.Ledger[currentActiveAccount.TransactionCount - 1].Description = "Transferred Out to " + destAcc.AccountNumber;
-                        destAcc.Ledger[destAcc.TransactionCount - 1].Description = "Transferred In from " + currentActiveAccount.AccountNumber;
-                        Console.WriteLine("Transfer complete.");
-                    }
-                }
+                currentActiveAccount.Ledger[currentActiveAccount.TransactionCount - 1].Description = "Transferred Out to " + destAcc.AccountNumber;
+                destAcc.Ledger[destAcc.TransactionCount - 1].Description = "Transferred In from " + currentActiveAccount.AccountNumber;
+                Console.WriteLine("Transfer complete.");
             }
             else
             {
-                Console.WriteLine("Destination account not found.");
+                Console.WriteLine("Invalid amount input.");
             }
         }
 
@@ -793,28 +939,30 @@ namespace BankingSystem
             bool loop = true;
             while (loop)
             {
-                Console.WriteLine("\n--- BENEFICIARY MENU ---");
-                Console.WriteLine(" 1. View Saved Accounts");
-                Console.WriteLine(" 2. Add New Account");
-                Console.WriteLine(" 3. Clear List");
-                Console.WriteLine(" 4. Back");
-                Console.Write("Choice: ");
-                string choice = Console.ReadLine();
+                try
+                {
+                    Console.WriteLine("\n--- BENEFICIARY MENU ---");
+                    Console.WriteLine(" 1. View Saved Accounts");
+                    Console.WriteLine(" 2. Add New Account");
+                    Console.WriteLine(" 3. Clear List");
+                    Console.WriteLine(" 4. Back");
+                    Console.Write("Choice: ");
+                    string choice = Console.ReadLine();
 
-                if (choice == "1")
-                {
-                    for (int i = 0; i < currentActiveAccount.BeneficiaryCount; i++)
+                    if (choice == "1")
                     {
-                        Console.WriteLine(" -> Stored: " + currentActiveAccount.Beneficiaries[i]);
+                        for (int i = 0; i < currentActiveAccount.BeneficiaryCount; i++)
+                        {
+                            Console.WriteLine(" -> Stored: " + currentActiveAccount.Beneficiaries[i]);
+                        }
                     }
-                }
-                else if (choice == "2")
-                {
-                    Console.Write("Enter Account Number to add: ");
-                    string entry = Console.ReadLine();
-                    
-                    if (CentralBankData.Find(entry) != null)
+                    else if (choice == "2")
                     {
+                        Console.Write("Enter Account Number to add: ");
+                        string entry = Console.ReadLine();
+
+                        BankAccount found = CentralBankData.FindOrThrow(entry);
+
                         if (entry == currentActiveAccount.AccountNumber)
                         {
                             continue;
@@ -825,19 +973,19 @@ namespace BankingSystem
                             Console.WriteLine("Added successfully.");
                         }
                     }
-                    else
+                    else if (choice == "3")
                     {
-                        Console.WriteLine("Account does not exist.");
+                        currentActiveAccount.ClearBeneficiaries();
+                        Console.WriteLine("List cleared.");
+                    }
+                    else if (choice == "4")
+                    {
+                        loop = false;
                     }
                 }
-                else if (choice == "3")
+                catch (AccountNotFoundException ex)
                 {
-                    currentActiveAccount.ClearBeneficiaries();
-                    Console.WriteLine("List cleared.");
-                }
-                else if (choice == "4")
-                {
-                    loop = false;
+                    Console.WriteLine(ex.Message);
                 }
             }
         }
@@ -862,38 +1010,49 @@ namespace BankingSystem
             bool loop = true;
             while (loop)
             {
-                Console.WriteLine("\n--- PROFILE SETUP ---");
-                Console.WriteLine(" 1. Edit Phone");
-                Console.WriteLine(" 2. Edit Address");
-                Console.WriteLine(" 3. Change PIN");
-                Console.WriteLine(" 4. Back");
-                Console.Write("Choice: ");
-                string select = Console.ReadLine();
+                try
+                {
+                    Console.WriteLine("\n--- PROFILE SETUP ---");
+                    Console.WriteLine(" 1. Edit Phone");
+                    Console.WriteLine(" 2. Edit Address");
+                    Console.WriteLine(" 3. Change PIN");
+                    Console.WriteLine(" 4. Back");
+                    Console.Write("Choice: ");
+                    string select = Console.ReadLine();
 
-                if (select == "1")
-                {
-                    Console.Write("Enter Phone: ");
-                    currentActiveAccount.PhoneNumber = Console.ReadLine();
-                }
-                else if (select == "2")
-                {
-                    Console.Write("Enter Address: ");
-                    currentActiveAccount.AddressLine = Console.ReadLine();
-                }
-                else if (select == "3")
-                {
-                    Console.Write("Enter old PIN: ");
-                    
-                    if (currentActiveAccount.VerifyPin(Console.ReadLine()))
+                    if (select == "1")
                     {
-                        Console.Write("Enter new PIN: ");
-                        currentActiveAccount.UpdatePin(Console.ReadLine());
-                        Console.WriteLine("PIN updated.");
+                        Console.Write("Enter Phone: ");
+                        currentActiveAccount.PhoneNumber = Console.ReadLine();
+                    }
+                    else if (select == "2")
+                    {
+                        Console.Write("Enter Address: ");
+                        currentActiveAccount.AddressLine = Console.ReadLine();
+                    }
+                    else if (select == "3")
+                    {
+                        Console.Write("Enter old PIN: ");
+
+                        if (currentActiveAccount.VerifyPin(Console.ReadLine()))
+                        {
+                            Console.Write("Enter new PIN: ");
+                            currentActiveAccount.UpdatePin(Console.ReadLine());
+                            Console.WriteLine("PIN updated.");
+                        }
+                        else
+                        {
+                            Console.WriteLine("Incorrect PIN.");
+                        }
+                    }
+                    else if (select == "4")
+                    {
+                        loop = false;
                     }
                 }
-                else if (select == "4")
+                catch (InvalidAccountDataException ex)
                 {
-                    loop = false;
+                    Console.WriteLine("Could not update PIN: " + ex.Message);
                 }
             }
         }
@@ -907,8 +1066,8 @@ namespace BankingSystem
             Console.Write("Selection: ");
             string billChoice = Console.ReadLine();
 
-            double billCost = 0;
-            string billName = "";
+            double billCost;
+            string billName;
 
             if (billChoice == "1")
             {
@@ -927,16 +1086,9 @@ namespace BankingSystem
                 return;
             }
 
-            if (currentActiveAccount.Balance >= billCost)
-            {
-                currentActiveAccount.Withdraw(billCost);
-                currentActiveAccount.Ledger[currentActiveAccount.TransactionCount - 1].Description = "Paid " + billName;
-                Console.WriteLine("Bill paid successfully.");
-            }
-            else
-            {
-                Console.WriteLine("Insufficient funds.");
-            }
+            currentActiveAccount.Withdraw(billCost);
+            currentActiveAccount.Ledger[currentActiveAccount.TransactionCount - 1].Description = "Paid " + billName;
+            Console.WriteLine("Bill paid successfully.");
         }
 
         private void CheckCredit()
@@ -948,7 +1100,7 @@ namespace BankingSystem
             {
                 score += 120;
             }
-            
+
             if (currentActiveAccount.LoanBalance > 0)
             {
                 score -= 150;
@@ -957,7 +1109,7 @@ namespace BankingSystem
             {
                 score += 80;
             }
-            
+
             if (currentActiveAccount.TransactionCount > 5)
             {
                 score += 50;
@@ -989,7 +1141,7 @@ namespace BankingSystem
         {
             Console.WriteLine("\n--- REQUEST CHEQUE BOOK ---");
             Console.Write("Enter number of leaves required (25 or 50): ");
-            
+
             if (int.TryParse(Console.ReadLine(), out int leaves))
             {
                 if (leaves == 25 || leaves == 50)
@@ -1026,38 +1178,69 @@ namespace BankingSystem
         {
             while (AdminStart)
             {
-                Console.WriteLine("\n=====================================");
-                Console.WriteLine("           ADMINISTRATOR            ");
-                Console.WriteLine("=====================================");
-                Console.WriteLine(" 1. Create Account");
-                Console.WriteLine(" 2. Audit All Records");
-                Console.WriteLine(" 3. Issue Credit Loan");
-                Console.WriteLine(" 4. Mature Fixed Deposit");
-                Console.WriteLine(" 5. Freeze/Thaw Account");
-                Console.WriteLine(" 6. Process Cheque Queue");
-                Console.WriteLine(" 7. Filter High Wealth Profiles");
-                Console.WriteLine(" 8. View Bank Debtors List");
-                Console.WriteLine(" 9. Delete Account Record");
-                Console.WriteLine(" 10. Log Out");
-                Console.WriteLine("=====================================");
-                Console.Write("Selection: ");
-                
-                string choice = Console.ReadLine();
-                if (string.IsNullOrWhiteSpace(choice)) continue;
-
-                switch (choice)
+                try
                 {
-                    case "1": OpenNewAccount(); break;
-                    case "2": AuditAll(); break;
-                    case "3": IssueLoan(); break;
-                    case "4": ForceMaturity(); break;
-                    case "5": ToggleFreeze(); break;
-                    case "6": ReviewCheques(); break;
-                    case "7": HighWealthFilter(); break;
-                    case "8": ViewDebtors(); break;
-                    case "9": DeleteAccount(); break;
-                    case "10": LogOut(); break;
-                    default: Console.WriteLine("Invalid option."); break;
+                    Console.WriteLine("\n=====================================");
+                    Console.WriteLine("           ADMINISTRATOR            ");
+                    Console.WriteLine("=====================================");
+                    Console.WriteLine(" 1. Create Account");
+                    Console.WriteLine(" 2. Audit All Records");
+                    Console.WriteLine(" 3. Issue Credit Loan");
+                    Console.WriteLine(" 4. Mature Fixed Deposit");
+                    Console.WriteLine(" 5. Freeze/Thaw Account");
+                    Console.WriteLine(" 6. Process Cheque Queue");
+                    Console.WriteLine(" 7. Filter High Wealth Profiles");
+                    Console.WriteLine(" 8. View Bank Debtors List");
+                    Console.WriteLine(" 9. Delete Account Record");
+                    Console.WriteLine(" 10. Log Out");
+                    Console.WriteLine("=====================================");
+                    Console.Write("Selection: ");
+
+                    string choice = Console.ReadLine();
+                    if (string.IsNullOrWhiteSpace(choice)) continue;
+
+                    switch (choice)
+                    {
+                        case "1": OpenNewAccount(); break;
+                        case "2": AuditAll(); break;
+                        case "3": IssueLoan(); break;
+                        case "4": ForceMaturity(); break;
+                        case "5": ToggleFreeze(); break;
+                        case "6": ReviewCheques(); break;
+                        case "7": HighWealthFilter(); break;
+                        case "8": ViewDebtors(); break;
+                        case "9": DeleteAccount(); break;
+                        case "10": LogOut(); break;
+                        default: Console.WriteLine("Invalid option."); break;
+                    }
+                }
+                catch (DuplicateAccountException ex)
+                {
+                    Console.WriteLine("Could not create account: " + ex.Message);
+                }
+                catch (InvalidAccountDataException ex)
+                {
+                    Console.WriteLine("Invalid account data: " + ex.Message);
+                }
+                catch (AccountNotFoundException ex)
+                {
+                    Console.WriteLine(ex.Message);
+                }
+                catch (AccountFrozenException ex)
+                {
+                    Console.WriteLine("Blocked: " + ex.Message);
+                }
+                catch (InvalidTransactionException ex)
+                {
+                    Console.WriteLine("Invalid transaction: " + ex.Message);
+                }
+                catch (BankingException ex)
+                {
+                    Console.WriteLine("Operation failed: " + ex.Message);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("An unexpected error occurred: " + ex.Message);
                 }
             }
         }
@@ -1075,53 +1258,49 @@ namespace BankingSystem
             string name = Console.ReadLine();
             Console.Write("Account Number: ");
             string num = Console.ReadLine();
+
             if (CentralBankData.Find(num) != null)
             {
-                Console.WriteLine("ID already exists."); return;
+                Console.WriteLine("ID already exists.");
+                return;
             }
+
             Console.Write("PIN: ");
             string pin = Console.ReadLine();
             Console.WriteLine("Type: 1=Savings, 2=Checking, 3=FixedDeposit");
             Console.Write("Selection: ");
             string typeStr = Console.ReadLine();
             Console.Write("Initial Deposit: ");
-            
-            
+
             if (!double.TryParse(Console.ReadLine(), out double deposit))
             {
                 Console.WriteLine("Invalid allocation amount logic entered.");
                 return;
             }
-            
-            BankAccount acc1 = new SavingsAccount(num, name, pin, deposit);
-            BankAccount acc2 = new CheckingAccount(num, name, pin, deposit);
-            BankAccount acc3 = new FixedDepositAccount(num, name, pin, deposit);
-            
-            if (typeStr == "1")
+
+            BankAccount acc;
+            switch (typeStr)
             {
-                Console.Write("Phone: ");
-                acc1.PhoneNumber = Console.ReadLine();
-                Console.Write("Address: ");
-                acc1.AddressLine = Console.ReadLine();
-                CentralBankData.AddAccount(acc1);
-            }
-            else if (typeStr == "2")
-            {
-                Console.Write("Phone: ");
-                acc2.PhoneNumber = Console.ReadLine();
-                Console.Write("Address: ");
-                acc2.AddressLine = Console.ReadLine();
-                CentralBankData.AddAccount(acc2);
-            }
-            else if (typeStr == "3")
-            {
-                Console.Write("Phone: ");
-                acc3.PhoneNumber = Console.ReadLine();
-                Console.Write("Address: ");
-                acc3.AddressLine = Console.ReadLine();
-                CentralBankData.AddAccount(acc3);
+                case "1":
+                    acc = new SavingsAccount(num, name, pin, deposit);
+                    break;
+                case "2":
+                    acc = new CheckingAccount(num, name, pin, deposit);
+                    break;
+                case "3":
+                    acc = new FixedDepositAccount(num, name, pin, deposit);
+                    break;
+                default:
+                    Console.WriteLine("Invalid account type selected.");
+                    return;
             }
 
+            Console.Write("Phone: ");
+            acc.PhoneNumber = Console.ReadLine();
+            Console.Write("Address: ");
+            acc.AddressLine = Console.ReadLine();
+
+            CentralBankData.AddAccount(acc);
             Console.WriteLine("Account created successfully.");
         }
 
@@ -1147,71 +1326,69 @@ namespace BankingSystem
         private void IssueLoan()
         {
             Console.Write("\nEnter Account Number: ");
-            BankAccount acc = CentralBankData.Find(Console.ReadLine());
-            
-            if (acc != null)
-            {
-                Console.WriteLine("1. Standard Loan");
-                Console.WriteLine("2. Loan with Upfront Processing Fee");
-                Console.Write("Select Route: ");
-                string path = Console.ReadLine();
+            BankAccount acc = CentralBankData.FindOrThrow(Console.ReadLine());
 
-                Console.Write("Enter Loan Amount: ");
-                
-                if (!double.TryParse(Console.ReadLine(), out double amt))
+            Console.WriteLine("1. Standard Loan");
+            Console.WriteLine("2. Loan with Upfront Processing Fee");
+            Console.Write("Select Route: ");
+            string path = Console.ReadLine();
+
+            Console.Write("Enter Loan Amount: ");
+
+            if (!double.TryParse(Console.ReadLine(), out double amt))
+            {
+                Console.WriteLine("Invalid financial assignment amount.");
+                return;
+            }
+
+            if (path == "2")
+            {
+                Console.Write("Enter Processing Fee: ");
+                if (!double.TryParse(Console.ReadLine(), out double fee))
                 {
-                    Console.WriteLine("Invalid financial assignment amount.");
+                    Console.WriteLine("Invalid tracking processing assignment fee.");
                     return;
                 }
-
-                if (path == "2")
-                {
-                    Console.Write("Enter Processing Fee: ");
-                    if (!double.TryParse(Console.ReadLine(), out double fee))
-                    {
-                        Console.WriteLine("Invalid tracking processing assignment fee.");
-                        return;
-                    }
-                    acc.AddLoan(amt, fee);
-                }
-                else
-                {
-                    acc.AddLoan(amt);
-                }
-                Console.WriteLine("Loan added to system.");
+                acc.AddLoan(amt, fee);
             }
+            else
+            {
+                acc.AddLoan(amt);
+            }
+            Console.WriteLine("Loan added to system.");
         }
 
         private void ForceMaturity()
         {
             Console.Write("\nEnter Fixed Deposit Account Number: ");
-            BankAccount acc = CentralBankData.Find(Console.ReadLine());
-            
-            if (acc != null && acc is FixedDepositAccount fixedDepositAccount)
+            BankAccount acc = CentralBankData.FindOrThrow(Console.ReadLine());
+
+            if (acc is FixedDepositAccount fixedDepositAccount)
             {
                 fixedDepositAccount.IsMatured = true;
                 Console.WriteLine("Asset status switched to matured.");
+            }
+            else
+            {
+                Console.WriteLine("That account is not a Fixed Deposit account.");
             }
         }
 
         private void ToggleFreeze()
         {
             Console.Write("\nEnter Account Number: ");
-            BankAccount acc = CentralBankData.Find(Console.ReadLine());
-            
-            if (acc != null)
-            {
-                Console.WriteLine("1=Freeze, 2=Thaw");
-                string sel = Console.ReadLine();
-                acc.IsFrozen = (sel == "1");
-                Console.WriteLine("Status updated.");
-            }
+            BankAccount acc = CentralBankData.FindOrThrow(Console.ReadLine());
+
+            Console.WriteLine("1=Freeze, 2=Thaw");
+            string sel = Console.ReadLine();
+            acc.IsFrozen = (sel == "1");
+            Console.WriteLine("Status updated.");
         }
 
         private void ReviewCheques()
         {
             Console.WriteLine("\n--- CHEQUE REQUEST QUEUE ---");
-            
+
             if (CentralBankData.ChequeCount == 0) return;
 
             for (int i = 0; i < CentralBankData.ChequeCount; i++)
@@ -1221,10 +1398,10 @@ namespace BankingSystem
             }
 
             Console.Write("Enter Request ID to handle: ");
-            
+
             string id = Console.ReadLine();
             ChequeRequest match = null;
-            
+
             for (int i = 0; i < CentralBankData.ChequeCount; i++)
             {
                 if (CentralBankData.ChequeRegistry[i].RequestId == id) match = CentralBankData.ChequeRegistry[i];
@@ -1242,7 +1419,7 @@ namespace BankingSystem
         private void HighWealthFilter()
         {
             Console.Write("\nEnter floor wealth filter amount: ");
-            
+
             if (double.TryParse(Console.ReadLine(), out double floor))
             {
                 for (int i = 0; i < CentralBankData.AccountCount; i++)
@@ -1264,7 +1441,7 @@ namespace BankingSystem
         private void ViewDebtors()
         {
             Console.WriteLine("\n--- ACTIVE BANK DEBTORS ---");
-            
+
             for (int i = 0; i < CentralBankData.AccountCount; i++)
             {
                 BankAccount acc = CentralBankData.Database[i];
@@ -1279,19 +1456,16 @@ namespace BankingSystem
         private void DeleteAccount()
         {
             Console.Write("\nEnter Account ID to delete: ");
-            
-            BankAccount acc = CentralBankData.Find(Console.ReadLine());
-            
-            if (acc != null)
+
+            BankAccount acc = CentralBankData.FindOrThrow(Console.ReadLine());
+
+            if (acc.Balance > 0 || acc.LoanBalance > 0)
             {
-                if (acc.Balance > 0 || acc.LoanBalance > 0)
-                {
-                    Console.WriteLine("Cannot delete account with active balances or loans.");
-                    return;
-                }
-                CentralBankData.RemoveAccount(acc);
-                Console.WriteLine("Account purged safely.");
+                Console.WriteLine("Cannot delete account with active balances or loans.");
+                return;
             }
+            CentralBankData.RemoveAccount(acc);
+            Console.WriteLine("Account purged safely.");
         }
     }
 
@@ -1299,18 +1473,33 @@ namespace BankingSystem
     {
         static void Main(string[] args)
         {
-            SavingsAccount user1 = new SavingsAccount("ACC1", "Saqib", "1111", 50000.0);
-            user1.PhoneNumber = "0300-1234567";
-            user1.AddressLine = "Block 4, Gulshan-e-Iqbal";
-            CentralBankData.AddAccount(user1);
+            try
+            {
+                SavingsAccount user1 = new SavingsAccount("ACC1", "Saqib", "1111", 50000.0);
+                user1.PhoneNumber = "0300-1234567";
+                user1.AddressLine = "Block 4, Gulshan-e-Iqbal";
+                CentralBankData.AddAccount(user1);
 
-            CheckingAccount user2 = new CheckingAccount("ACC2", "Abdullah", "2222", 150000.0);
-            user2.PhoneNumber = "0333-7654321";
-            user2.AddressLine = "Phase 6, DHA";
-            CentralBankData.AddAccount(user2);
+                CheckingAccount user2 = new CheckingAccount("ACC2", "Abdullah", "2222", 150000.0);
+                user2.PhoneNumber = "0333-7654321";
+                user2.AddressLine = "Phase 6, DHA";
+                CentralBankData.AddAccount(user2);
 
-            Login runtime = new Login();
-            runtime.CheckingLogin();
+                Login runtime = new Login();
+                runtime.CheckingLogin();
+            }
+            catch (BankingException ex)
+            {
+                Console.WriteLine("Failed to start the banking system: " + ex.Message);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("A fatal error occurred: " + ex.Message);
+            }
+            finally
+            {
+                Console.WriteLine("\nSession ended. Thank you for using the Bank System.");
+            }
         }
     }
 }
